@@ -15,32 +15,23 @@ const char L4D2REQ_QUERYSVRINFO[] = { 0xff, 0xff, 0xff, 0xff, 0x54, 0x53, 0x6f,
 		0x75, 0x72, 0x63, 0x65, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x20,
 		0x51, 0x75, 0x65, 0x72, 0x79, 0x00 };
 
-int hostname_to_ip(const char *hostname, char *ip)
-{
-	int sockfd;
-	struct addrinfo hints, *servinfo, *p;
-	struct sockaddr_in *h;
-	int rv;
+int hostname_to_ip(const char *hostname, char *ip) {
+	struct hostent *he;
+	struct in_addr **addr_list;
+	int i;
 
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
-	hints.ai_socktype = SOCK_STREAM;
-
-	if ((rv = getaddrinfo(hostname, "http", &hints, &servinfo)) != 0)
-	{
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+	if ((he = gethostbyname(hostname)) == NULL) {
+		fprintf(stderr, "gethostbyname() throws an exception!\n");
 		return 1;
 	}
 
-	// loop through all the results and connect to the first we can
-	for (p = servinfo; p != NULL; p = p->ai_next)
-	{
-		h = (struct sockaddr_in *) p->ai_addr;
-		strcpy(ip, inet_ntoa(h->sin_addr));
+	addr_list = (struct in_addr **) he->h_addr_list;
+	for (i = 0; addr_list[i] != NULL; i++) {
+		strcpy(ip, inet_ntoa(*addr_list[i]));
+		return 0;
 	}
 
-	freeaddrinfo(servinfo); // all done with this structure
-	return 0;
+	return 1;
 }
 
 char* remove_bom(char* input) {
@@ -75,10 +66,20 @@ int main(int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	hostname_to_ip(server_hostname, server_ipaddr);
+	int server_hostname_unsolved = hostname_to_ip(server_hostname, server_ipaddr);
+
+	if (server_hostname_unsolved) {
+		fprintf(stderr, "Can not resolve %s\n", server_hostname);
+	}
+
 	if (server_hostname != argv[1] && server_hostname != NULL) {
 		free(server_hostname);
 	}
+	
+	if (server_hostname_unsolved) {
+		exit(EXIT_FAILURE);
+	}
+
 	printf("Testing: %s:%d\n", server_ipaddr, server_port);
 
 	struct sockaddr_in si_other;

@@ -4,7 +4,7 @@ A simple tool that allow you to monitor the status of any L4D2 servers
 without the game itself. If query succeeded, This tool prints the server name, current map, 
 number of player online and total number of available slots. __Supports Chinese!!!__
 
-Compile the source: `gcc l4d2query.c -o l4d2query`, supports Linux, Windows (WSL only) ...
+Compile the source: `gcc l4d2query.c -o l4d2query`, supports Linux, Windows (WSL only), Android ...
 
 Syntax
 ------
