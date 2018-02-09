@@ -42,10 +42,12 @@ const char L4D2REQ_QUERYSVRINFO[] = { 0xff, 0xff, 0xff, 0xff, 0x54, 0x53, 0x6f,
 		0x75, 0x72, 0x63, 0x65, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x20,
 		0x51, 0x75, 0x65, 0x72, 0x79, 0x00 };
 
-int hostname_to_ip(const char *hostname, char ip[][16], int ipMax) {
+// Resolve IP addresses for a given hostname then return the IP list 
+// and set the int pointed by ip_count to the number of addresses
+struct in_addr** iplistfromhostname(const char *hostname, int* ip_count) {
 	struct hostent *he;
 	struct in_addr **addr_list;
-	int i;
+	int i = 0;
 
 	if ((he = gethostbyname(hostname)) == NULL) {
 		fprintf(stderr, "gethostbyname() throws an exception!\n");
@@ -53,13 +55,13 @@ int hostname_to_ip(const char *hostname, char ip[][16], int ipMax) {
 	}
 
 	addr_list = (struct in_addr **) he->h_addr_list;
-	for (i = 0; i < ipMax && addr_list[i] != NULL; i++) {
-		strcpy(ip[i], inet_ntoa(*addr_list[i]));
-	}
+	while (addr_list[++i] != NULL);
+	*ip_count = i;
 
-	return i;
+	return addr_list;
 }
 
+// Remove UTF-8 BOM, if it presents
 char* remove_bom(char* input) {
 	if ((input[0] & 0xff) == 0xEF &&
 		(input[1] & 0xff) == 0xBB &&
@@ -75,7 +77,7 @@ int main(int argc, char *argv[]) {
 
 	int server_port;
 	char* server_hostname = 0;
-	char server_ipaddr[16][16];
+	struct in_addr** server_ipaddr;
 
 #ifdef _WIN32
 	WSADATA wd = { 0 };
@@ -106,7 +108,9 @@ int main(int argc, char *argv[]) {
 		goto on_error;
 	}
 
-	int server_ip_count = hostname_to_ip(server_hostname, server_ipaddr, 16);
+	int server_ip_count;
+	server_ipaddr = iplistfromhostname(server_hostname, &server_ip_count);
+	printf("Resolved %d IP addresses\n", server_ip_count);
 
 	if (server_ip_count == 0) {
 		fprintf(stderr, "Can not resolve %s\n", server_hostname);
@@ -114,10 +118,9 @@ int main(int argc, char *argv[]) {
 		goto on_error;
 	}
 
-	int i;
-	for (i = 0; i < server_ip_count; ++i)
+	for (int i = 0; i < server_ip_count; ++i)
 	{
-		printf("Testing: %s:%d\n", server_ipaddr[i], server_port);
+		printf("Testing: %s:%d\n", inet_ntoa(*server_ipaddr[i]), server_port);
 
 		struct sockaddr_in si_other;
 		int slen = sizeof(si_other);
@@ -138,7 +141,7 @@ int main(int argc, char *argv[]) {
 		si_other.sin_family = AF_INET;
 		si_other.sin_port = htons(server_port);
 
-		si_other.sin_addr.s_addr = inet_addr(server_ipaddr[i]);
+		si_other.sin_addr.s_addr = server_ipaddr[i]->s_addr;
 
 		if (si_other.sin_addr.s_addr == INADDR_NONE || si_other.sin_addr.s_addr == INADDR_ANY)
 		{
