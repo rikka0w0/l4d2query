@@ -2,6 +2,9 @@
 #include <unistd.h>
 #include<arpa/inet.h>
 #include<sys/socket.h>
+#include<sys/time.h>
+#include<sys/ioctl.h>
+#include<fcntl.h>
 #include<errno.h>
 #include<netdb.h>
 
@@ -21,6 +24,8 @@ static int close(SOCKET s)
 	return closesocket(s);
 }
 
+#define ioctl ioctlsocket
+
 #endif
 
 #include<stdio.h>
@@ -28,7 +33,7 @@ static int close(SOCKET s)
 #include<stdlib.h>
 
 #define MAX_RETRY_COUNT 3
-#define TIMEOUT_SECONDS 5
+#define TIMEOUT_SECONDS 3
 
 #define BUFLEN 512  //Max length of buffer
 
@@ -126,6 +131,9 @@ int main(int argc, char *argv[]) {
 			goto on_error;
 		}
 
+		long one = 1L;
+		ioctl(socket_handler, (int)FIONBIO, &one);
+
 		memset((char *)&si_other, 0, sizeof(si_other));
 		si_other.sin_family = AF_INET;
 		si_other.sin_port = htons(server_port);
@@ -163,11 +171,12 @@ int main(int argc, char *argv[]) {
 			timeout_val.tv_sec = TIMEOUT_SECONDS;
 			timeout_val.tv_usec = 0;
 
-			if (select(1, &read_socket_list, 0, &err_socket_list, &timeout_val))
+			if (select(socket_handler + 1, &read_socket_list, 0, &err_socket_list, &timeout_val))
 			{
 				if (FD_ISSET(socket_handler, &read_socket_list))
 				{
 					// Try to receive some data, this will not blocking since select call ensure packet arrived
+                    slen = sizeof(si_other);
 					if (recvfrom(socket_handler, recv_buf, BUFLEN, SOCKET_FLAG, (struct sockaddr *) &si_other, &slen) == -1) {
 						fprintf(stderr, "Failed to receive UDP packet from the server\n");
 					}
