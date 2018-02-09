@@ -151,7 +151,7 @@ int L4D2_QueryServerInfo(int socket_handler, const struct sockaddr *dest_addr, s
 	}
 
 	if (retry_count == MAX_RETRY_COUNT) {
-		fprintf(stderr, "Server may be down. Retry count (%d) is reached.\n", MAX_RETRY_COUNT);
+		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
 		return 1;
 	}
 
@@ -207,7 +207,7 @@ char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, 
 	}
 
 	if (retry_count == MAX_RETRY_COUNT) {
-		fprintf(stderr, "Server may be down. Retry count (%d) is reached.\n", MAX_RETRY_COUNT);
+		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
 		return NULL;
 	}
 	
@@ -239,7 +239,7 @@ char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, 
 	}
 
 	if (retry_count == MAX_RETRY_COUNT) {
-		fprintf(stderr, "Server may be down. Retry count (%d) is reached.\n", MAX_RETRY_COUNT);
+		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
 		return NULL;
 	}
 
@@ -257,7 +257,8 @@ char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, 
 	char** result = malloc(sizeof(char*) * (*count));
 	char* recv_ptr = recv_buf + 7;
 
-	for (int i = 0; i<*count; i++) {
+	int i;
+	for (i = 0; i<*count; i++) {
 		result[i] = RemoveUTF8Bom(recv_ptr);
 		recv_ptr += strlen(recv_ptr) + 10;
 	}
@@ -276,7 +277,7 @@ int main(int argc, char *argv[]) {
 	WSADATA wd = { 0 };
 	if (WSAStartup(MAKEWORD(1, 1), &wd) != 0)
 	{
-		fprintf(stderr, "Fail to initailize Winsock DLL.\n");
+		fprintf(stderr, "Unable to initailize Winsock DLL.\n");
 		goto on_error;
 	}
 
@@ -313,9 +314,9 @@ int main(int argc, char *argv[]) {
 		goto on_error;
 	}
 
-	for (int i = 0; i < server_ip_count; ++i)
-	{
-		printf("Testing: %s:%d\n", inet_ntoa(*server_ipaddr[i]), server_port);
+	int i;
+	for (i = 0; i < server_ip_count; ++i) {
+		printf("Querying: %s:%d\n", inet_ntoa(*server_ipaddr[i]), server_port);
 
 		struct sockaddr_in si_other;
 		int slen = sizeof(si_other);
@@ -354,8 +355,9 @@ int main(int argc, char *argv[]) {
 		char** player_list = L4D2_GetPlayerList(socket_handler, (struct sockaddr *) &si_other, slen, &player_count);
 		if (player_list != NULL && player_count > 0) {
 			printf("Players(%d):\n", player_count);
-			for (int i = 0; i < player_count; i++) {
-				printf("%i. %s\n", i, player_list[i]);
+			int j;
+			for (j = 0; j < player_count; j++) {
+				printf("%i. %s\n", j+1, player_list[j]);
 			}
 		}
 		free(player_list);
