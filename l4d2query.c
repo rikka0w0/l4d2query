@@ -15,7 +15,12 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <WinSock2.h>
+#pragma comment(lib, "WSock32.lib")
 #include <Windows.h>
+
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+typedef int socklen_t;
 
 #define SOCKET_FLAG 0
 
@@ -35,8 +40,6 @@ static int close(SOCKET s)
 #define MAX_RETRY_COUNT 3
 #define TIMEOUT_SECONDS 3
 
-#define BUFLEN 512  //Max length of buffer
-
 #define L4D2REQ_QUERYSVRINFO_LEN 25
 const char L4D2REQ_QUERYSVRINFO[] = { 0xff, 0xff, 0xff, 0xff, 0x54, 0x53, 0x6f,
 		0x75, 0x72, 0x63, 0x65, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x20,
@@ -53,6 +56,9 @@ struct L4D2REP_QUERYSVRINFO {
 	char  player_count;
 	char  slots;
 };
+
+#define BUFLEN 512  //Max length of buffer
+char mybuf[BUFLEN];
 
 // Resolve IP addresses for a given hostname then return the IP list 
 // and set the int pointed by ip_count to the number of addresses
@@ -139,14 +145,14 @@ ssize_t ExchangeUDPPacket(int socket_handler, const struct sockaddr *dest_addr, 
 }
 
 // Return 0 if succeded, otherwise return the error code
-int L4D2_QueryServerInfo(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, struct L4D2REP_QUERYSVRINFO* result) {
-	char recv_buf[BUFLEN];
+int L4D2_QueryServerInfo(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, char* recv_buf, int recv_buf_len, struct L4D2REP_QUERYSVRINFO* result) {
+	
 	int retry_count;
 
-	memset(recv_buf, '\0', BUFLEN);
+	memset(recv_buf, '\0', recv_buf_len);
 	if (ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
 		L4D2REQ_QUERYSVRINFO, L4D2REQ_QUERYSVRINFO_LEN,
-		recv_buf, BUFLEN, &retry_count) < 1) {
+		recv_buf, recv_buf_len, &retry_count) < 1) {
 		return 1;
 	}
 
@@ -193,14 +199,13 @@ int L4D2_QueryServerInfo(int socket_handler, const struct sockaddr *dest_addr, s
 }
 
 // Return an array of strings, make sure to free it in order to prevent memory leak. Return NULL if encounter error. 
-char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, int* count) {
-	char recv_buf[BUFLEN];
+char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, char* recv_buf, int recv_buf_len, int* count) {
 	int retry_count;
 
-	memset(recv_buf, '\0', BUFLEN);
-	int recv_actual_length = ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
+	memset(recv_buf, '\0', recv_buf_len);
+	ssize_t recv_actual_length = ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
 		L4D2REQ_GETPLAYERLIST, L4D2REQ_GETPLAYERLIST_LEN,
-		recv_buf, BUFLEN, &retry_count);
+		recv_buf, recv_buf_len, &retry_count);
 
 	if (recv_actual_length < 1) {
 		return NULL;
@@ -232,7 +237,7 @@ char** L4D2_GetPlayerList(int socket_handler, const struct sockaddr *dest_addr, 
 	
 	recv_actual_length = ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
 		second_req, L4D2REQ_GETPLAYERLIST_LEN,
-		recv_buf, BUFLEN, &retry_count);
+		recv_buf, recv_buf_len, &retry_count);
 
 	if (recv_actual_length < 1) {
 		return NULL;
@@ -292,7 +297,7 @@ int main(int argc, char *argv[]) {
 		}
 		else {
 			server_port = atoi(server_port_str + 1);
-			int server_hostname_len = server_port_str - argv[1];
+			size_t server_hostname_len = server_port_str - argv[1];
 			server_hostname = malloc(sizeof(char) * (server_hostname_len + 1));
 			memcpy(server_hostname, argv[1], server_hostname_len);
 			server_hostname[server_hostname_len] = 0;
@@ -346,13 +351,13 @@ int main(int argc, char *argv[]) {
 		}
 
 		struct L4D2REP_QUERYSVRINFO query_server_result;
-		int qret = L4D2_QueryServerInfo(socket_handler, (struct sockaddr *) &si_other, slen, &query_server_result);
+		int qret = L4D2_QueryServerInfo(socket_handler, (struct sockaddr *) &si_other, slen, mybuf, BUFLEN, &query_server_result);
 		printf("%s: %s (%d/%d)\n",
 			query_server_result.servername, query_server_result.mapname,
 			query_server_result.player_count, query_server_result.slots);
 
 		int player_count = 0;
-		char** player_list = L4D2_GetPlayerList(socket_handler, (struct sockaddr *) &si_other, slen, &player_count);
+		char** player_list = L4D2_GetPlayerList(socket_handler, (struct sockaddr *) &si_other, slen, mybuf, BUFLEN, &player_count);
 		if (player_list != NULL && player_count > 0) {
 			printf("Players(%d):\n", player_count);
 			int j;
