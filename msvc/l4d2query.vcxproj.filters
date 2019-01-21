@@ -18,5 +18,13 @@
     <ClCompile Include="..\l4d2query.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\l4d2query.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
