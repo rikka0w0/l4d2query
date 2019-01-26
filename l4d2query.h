@@ -7,6 +7,7 @@ struct L4D2REP_QUERYSVRINFO {
 	char* gametype;
 	char  player_count;
 	char  slots;
+	char  version;
 };
 
 // Return values
@@ -14,6 +15,11 @@ struct L4D2REP_QUERYSVRINFO {
 #define L4D2REP_INVALIDHOST 1
 #define L4D2REP_SOCKETERR 2
 #define L4D2REP_QUERYFAILED 3
+
+// Versions
+#define L4D2REP_VER_UNKNOWN 0
+#define L4D2REP_VER_L4D2 1
+#define L4D2REP_VER_CS16 2
 
 /**
  *	Query the server information. Pointers in result points to somewhere in the buffer.

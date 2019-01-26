@@ -48,6 +48,8 @@ const char L4D2REQ_QUERYSVRINFO[] = { 0xff, 0xff, 0xff, 0xff, 0x54, 0x53, 0x6f,
 #define L4D2REQ_GETPLAYERLIST_LEN 9
 const char L4D2REQ_GETPLAYERLIST[] = { 0xff, 0xff, 0xff, 0xff, 0x55, 0x00, 0x00, 0x00, 0x00 };
 
+const char* game_vers[] = {"Unknown game", "Left 4 Dead 2", "Counter Strike 1.6"};
+
 #define BUFLEN 512  //Max length of buffer
 char mybuf[BUFLEN];
 
@@ -135,37 +137,9 @@ ssize_t ExchangeUDPPacket(int socket_handler, const struct sockaddr *dest_addr, 
 	return actual_received;
 }
 
-// Return 0 if succeded, otherwise return the error code
-int L4D2_QueryServerInfo_Impl(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, char* recv_buf, int recv_buf_len, struct L4D2REP_QUERYSVRINFO* result) {
-	
-	int retry_count;
+static int parse_l4d2_responce(char* recv_ptr, struct L4D2REP_QUERYSVRINFO* result) {
+	result->version = L4D2REP_VER_L4D2;
 
-	memset(recv_buf, '\0', recv_buf_len);
-	if (ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
-		L4D2REQ_QUERYSVRINFO, L4D2REQ_QUERYSVRINFO_LEN,
-		recv_buf, recv_buf_len, &retry_count) < 1) {
-		return 1;
-	}
-
-	if (retry_count == MAX_RETRY_COUNT) {
-		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
-		return 1;
-	}
-
-	char* recv_ptr = recv_buf;
-
-	// Check magic number and header
-	if ((recv_ptr[0] & 0xff) != 0xff ||
-		(recv_ptr[1] & 0xff) != 0xff ||
-		(recv_ptr[2] & 0xff) != 0xff ||
-		(recv_ptr[3] & 0xff) != 0xff ||
-		(recv_ptr[4] & 0xff) != 0x49 ||
-		(recv_ptr[5] & 0xff) != 0x11) {
-		fprintf(stderr, "Invalid responce from server\n");
-		return 1;
-	}
-
-	recv_ptr += 6;
 	result->servername = recv_ptr;
 	recv_ptr += strlen(result->servername) + 1;
 	result->mapname = recv_ptr;
@@ -186,7 +160,67 @@ int L4D2_QueryServerInfo_Impl(int socket_handler, const struct sockaddr *dest_ad
 
 	result->servername = RemoveUTF8Bom(result->servername);
 	result->mapname = RemoveUTF8Bom(result->mapname);
+
 	return 0;
+}
+
+static int parse_cs16_responce(char* recv_ptr, struct L4D2REP_QUERYSVRINFO* result) {
+	result->version = L4D2REP_VER_CS16;
+
+	result->servername = recv_ptr;
+	recv_ptr += strlen(result->servername) + 1;
+	result->servername = recv_ptr;
+	recv_ptr += strlen(result->servername) + 1;
+	result->mapname = recv_ptr;
+	recv_ptr += strlen(result->mapname) + 1;
+	result->dir = recv_ptr;
+	recv_ptr += strlen(result->dir) + 1;
+	result->gametype = recv_ptr;
+	recv_ptr += strlen(result->gametype) + 1;
+
+	result->player_count = recv_ptr[0];
+	result->slots = recv_ptr[1];
+
+	result->servername = RemoveUTF8Bom(result->servername);
+	result->mapname = RemoveUTF8Bom(result->mapname);
+
+	return 0;
+}
+
+// Return 0 if succeded, otherwise return the error code
+int L4D2_QueryServerInfo_Impl(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, char* recv_buf, int recv_buf_len, struct L4D2REP_QUERYSVRINFO* result) {
+	result->version = L4D2REP_VER_UNKNOWN;
+	int retry_count;
+
+	memset(recv_buf, '\0', recv_buf_len);
+	if (ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
+		L4D2REQ_QUERYSVRINFO, L4D2REQ_QUERYSVRINFO_LEN,
+		recv_buf, recv_buf_len, &retry_count) < 1) {
+		return 1;
+	}
+
+	if (retry_count == MAX_RETRY_COUNT) {
+		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
+		return 1;
+	}
+
+	// Check magic number and header
+	if ((recv_buf[0] & 0xff) == 0xff &&
+		(recv_buf[1] & 0xff) == 0xff &&
+		(recv_buf[2] & 0xff) == 0xff &&
+		(recv_buf[3] & 0xff) == 0xff) {
+
+		if (
+			(recv_buf[4] & 0xff) == 0x49 &&
+			(recv_buf[5] & 0xff) == 0x11) {
+			return parse_l4d2_responce(recv_buf+6, result);
+		} else if ((recv_buf[4] & 0xff) == 0x6D) {
+			return parse_cs16_responce(recv_buf+5, result);
+		}
+	}
+
+	fprintf(stderr, "Invalid responce from server\n");
+	return 1;
 }
 
 // Return an array of strings, make sure to free it in order to prevent memory leak. Return NULL if encounter error. 
@@ -414,6 +448,7 @@ int l4d2query_run(int argc, char *argv[]) {
 	struct L4D2REP_QUERYSVRINFO query_server_result;
 	int ret = L4D2_QueryServerInfo(argv[1], &query_server_result, mybuf, BUFLEN);
 	if (ret == L4D2REP_OK) {
+		printf("%s\n", game_vers[query_server_result.version]);
 		printf("%s: %s (%d/%d)\n",
 			query_server_result.servername, query_server_result.mapname,
 			query_server_result.player_count, query_server_result.slots);
