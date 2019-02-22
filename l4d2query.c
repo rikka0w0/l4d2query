@@ -63,6 +63,7 @@ struct in_addr** IPListFromHostname(const char *hostname, int* ip_count) {
 
 	if ((he = gethostbyname(hostname)) == NULL) {
 		fprintf(stderr, "gethostbyname() throws an exception!\n");
+		*ip_count = 0;
 		return NULL;
 	}
 
@@ -323,6 +324,9 @@ int parse_hostname(const char* hostname, struct in_addr** ipaddr, int* port) {
 		free(server_hostname);
 
 	if (server_ip_count == 0)
+		return L4D2REP_INVALIDHOST;
+
+	if (server_ipaddr == NULL)
 		return L4D2REP_INVALIDHOST;
 
 	*ipaddr = server_ipaddr[0];
