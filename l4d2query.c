@@ -16,6 +16,8 @@
 
 #include <WinSock2.h>
 #pragma comment(lib, "WSock32.lib")
+#include <ws2tcpip.h>
+#pragma comment (lib, "Ws2_32.lib")
 #include <Windows.h>
 
 #include <BaseTsd.h>
@@ -285,7 +287,6 @@ int parse_hostname(const char* hostname, struct sockaddr_in* ipaddr) {
 
 	// Make a copy of hostname
 	char* server_hostname = strdup(hostname);
-	struct in_addr** server_ipaddr;
 
 	int server_port;
 	char* server_port_str = strchr(hostname, ':');
