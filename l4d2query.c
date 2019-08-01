@@ -332,27 +332,26 @@ int L4D2_QueryServerInfo(const char* hostname, struct L4D2REP_QUERYSVRINFO* resu
 		return ret;
 
 	int socket_handler = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (socket_handler == -1) {
+	if (socket_handler == -1)
 		return L4D2REP_SOCKETERR;
-	}
 
 	long one = 1L;
 	ioctl(socket_handler, (int)FIONBIO, &one);
 
 	if (si_other.sin_addr.s_addr == INADDR_NONE || si_other.sin_addr.s_addr == INADDR_ANY) {
-		if (socket_handler != -1)
-			close(socket_handler);
+		close(socket_handler);
 		return L4D2REP_SOCKETERR;
 	}
 
 	int qret = L4D2_QueryServerInfo_Impl(socket_handler, (struct sockaddr *) &si_other, slen, buffer, buflen, result);
 
 	if (qret != 0) {
-		if (socket_handler != -1)
-			close(socket_handler);
+		close(socket_handler);
 		return L4D2REP_QUERYFAILED;
 	}
 
+
+	close(socket_handler);
 	return L4D2REP_OK;
 }
 
@@ -368,26 +367,24 @@ int L4D2_GetPlayerList(const char* hostname, char*** players, int* count) {
 		return ret;
 
 	int socket_handler = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (socket_handler == -1) {
+	if (socket_handler == -1)
 		return L4D2REP_SOCKETERR;
-	}
 
 	long one = 1L;
 	ioctl(socket_handler, (int)FIONBIO, &one);
 
 	if (si_other.sin_addr.s_addr == INADDR_NONE || si_other.sin_addr.s_addr == INADDR_ANY) {
-		if (socket_handler != -1)
-			close(socket_handler);
+		close(socket_handler);
 		return L4D2REP_SOCKETERR;
 	}
 
 	*players = L4D2_GetPlayerList_Impl(socket_handler, (struct sockaddr *) &si_other, slen, mybuf, BUFLEN, count);
 	if (*players == NULL) {
-		if (socket_handler != -1)
-			close(socket_handler);
+		close(socket_handler);
 		return L4D2REP_QUERYFAILED;
 	}
 
+	close(socket_handler);
 	return L4D2REP_OK;
 }
 
