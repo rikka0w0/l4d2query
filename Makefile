@@ -1,5 +1,5 @@
 CC := cc
-CFLAGS :=
+CFLAGS := -g
 
 main: l4d2query main.c
 	$(CC) $(CFLAGS) -o l4d2query l4d2query.o main.c

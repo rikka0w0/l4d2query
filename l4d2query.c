@@ -53,27 +53,6 @@ const char* game_vers[] = {"Unknown game", "Left 4 Dead 2", "Counter Strike 1.6"
 #define BUFLEN 512  //Max length of buffer
 char mybuf[BUFLEN];
 
-// Resolve IP addresses for a given hostname then return the IP list 
-// and set the int pointed by ip_count to the number of addresses
-// Return 0 when encounter error
-struct in_addr** IPListFromHostname(const char *hostname, int* ip_count) {
-	struct hostent *he;
-	struct in_addr **addr_list;
-	int i = 0;
-
-	if ((he = gethostbyname(hostname)) == NULL) {
-		fprintf(stderr, "gethostbyname() throws an exception!\n");
-		*ip_count = 0;
-		return NULL;
-	}
-
-	addr_list = (struct in_addr **) he->h_addr_list;
-	while (addr_list[++i] != NULL);
-	*ip_count = i;
-
-	return addr_list;
-}
-
 // Remove UTF-8 BOM, if it presents
 char* RemoveUTF8Bom(char* input) {
 	if ((input[0] & 0xff) == 0xEF &&
@@ -90,7 +69,7 @@ char* RemoveUTF8Bom(char* input) {
 // Return negative value when encounter error.
 ssize_t ExchangeUDPPacket(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen,
 	const char* payload, size_t payload_length, char* recv_buf, size_t recv_buf_len, int* retry_count) {
-	
+
 	ssize_t actual_received = -1;
 	int retry_cnt;
 	for (retry_cnt = 0; retry_cnt < MAX_RETRY_COUNT; ++retry_cnt) {
@@ -224,7 +203,7 @@ int L4D2_QueryServerInfo_Impl(int socket_handler, const struct sockaddr *dest_ad
 	return 1;
 }
 
-// Return an array of strings, make sure to free it in order to prevent memory leak. Return NULL if encounter error. 
+// Return an array of strings, make sure to free it in order to prevent memory leak. Return NULL if encounter error.
 char** L4D2_GetPlayerList_Impl(int socket_handler, const struct sockaddr *dest_addr, socklen_t addrlen, char* recv_buf, int recv_buf_len, int* count) {
 	int retry_count;
 
@@ -241,7 +220,7 @@ char** L4D2_GetPlayerList_Impl(int socket_handler, const struct sockaddr *dest_a
 		fprintf(stderr, "Reached maximum retry count (%d), The server might be down.\n", MAX_RETRY_COUNT);
 		return NULL;
 	}
-	
+
 	// Check magic number and header
 	if ((recv_buf[0] & 0xff) != 0xff ||
 		(recv_buf[1] & 0xff) != 0xff ||
@@ -251,7 +230,7 @@ char** L4D2_GetPlayerList_Impl(int socket_handler, const struct sockaddr *dest_a
 		fprintf(stderr, "Invalid responce from server\n");
 		return NULL;
 	}
-	
+
 	char second_req[L4D2REQ_GETPLAYERLIST_LEN];
 	memcpy(second_req, L4D2REQ_GETPLAYERLIST, L4D2REQ_GETPLAYERLIST_LEN);
 	// Attach signature
@@ -260,7 +239,7 @@ char** L4D2_GetPlayerList_Impl(int socket_handler, const struct sockaddr *dest_a
 	second_req[7] = recv_buf[7];
 	second_req[8] = recv_buf[8];
 
-	
+
 	recv_actual_length = ExchangeUDPPacket(socket_handler, dest_addr, addrlen,
 		second_req, L4D2REQ_GETPLAYERLIST_LEN,
 		recv_buf, recv_buf_len, &retry_count);
@@ -297,53 +276,60 @@ char** L4D2_GetPlayerList_Impl(int socket_handler, const struct sockaddr *dest_a
 	return result;
 }
 
-int parse_hostname(const char* hostname, struct in_addr** ipaddr, int* port) {
+// Create an struct sockaddr_in from url string (hostname:port)
+// If succeed, the result will be stored into the struct sockaddr_in pointed by ipaddr
+// Otherwise ipaddr will be left untouched and the function returns L4D2REP_INVALIDHOST
+int parse_hostname(const char* hostname, struct sockaddr_in* ipaddr) {
 	if (hostname == NULL)
 		return L4D2REP_INVALIDHOST;
 
-	int server_port;
-	char* server_hostname = 0;
+	// Make a copy of hostname
+	char* server_hostname = strdup(hostname);
 	struct in_addr** server_ipaddr;
 
+	int server_port;
 	char* server_port_str = strchr(hostname, ':');
 	if (server_port_str == NULL) {
 		server_port = 27015;
-		server_hostname = strdup(hostname);
 	}
 	else {
 		server_port = atoi(server_port_str + 1);
-		size_t server_hostname_len = server_port_str - hostname;
-		server_hostname = malloc(sizeof(char) * (server_hostname_len + 1));
-		memcpy(server_hostname, hostname, server_hostname_len);
-		server_hostname[server_hostname_len] = 0;
+		// Trim the hostname string
+		server_hostname[server_port_str - hostname] = 0;
 	}
 
-	int server_ip_count;
-	server_ipaddr = IPListFromHostname(server_hostname, &server_ip_count);
-	if (server_hostname)
-		free(server_hostname);
+        struct addrinfo hints, *res;
+        memset (&hints, 0, sizeof (hints));
+        hints.ai_family = AF_INET;      // Srcds is IPv4 only
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags |= AI_CANONNAME;
 
-	if (server_ip_count == 0)
-		return L4D2REP_INVALIDHOST;
+        int errcode = getaddrinfo(server_hostname, NULL, &hints, &res);
+        if (errcode != 0) {
+                fprintf(stderr, "getaddrinfo() throws an exception! (Code %d)\n", errcode);
+                return L4D2REP_INVALIDHOST;
+        }
 
-	if (server_ipaddr == NULL)
-		return L4D2REP_INVALIDHOST;
+        // No IP was found
+        if (res == NULL) {
+                return L4D2REP_INVALIDHOST;
+        }
 
-	*ipaddr = server_ipaddr[0];
-	*port = server_port;
+
+	memcpy(ipaddr, (struct sockaddr_in *) res->ai_addr, sizeof(struct sockaddr_in));
+	ipaddr->sin_port = htons(server_port);
+	free(server_hostname);
 
 	return L4D2REP_OK;
 }
 
 int L4D2_QueryServerInfo(const char* hostname, struct L4D2REP_QUERYSVRINFO* result, char* buffer, size_t buflen) {
-	struct in_addr* server_ipaddr;
-	int server_port;
-	int ret = parse_hostname(hostname, &server_ipaddr, &server_port);
+        struct sockaddr_in si_other;
+        int slen = sizeof(si_other);
+
+	int ret = parse_hostname(hostname, &si_other);
 	if (ret != L4D2REP_OK)
 		return ret;
-
-	struct sockaddr_in si_other;
-	int slen = sizeof(si_other);
 
 	int socket_handler = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (socket_handler == -1) {
@@ -352,12 +338,6 @@ int L4D2_QueryServerInfo(const char* hostname, struct L4D2REP_QUERYSVRINFO* resu
 
 	long one = 1L;
 	ioctl(socket_handler, (int)FIONBIO, &one);
-
-	memset((char *)&si_other, 0, sizeof(si_other));
-	si_other.sin_family = AF_INET;
-	si_other.sin_port = htons(server_port);
-
-	si_other.sin_addr.s_addr = server_ipaddr->s_addr;
 
 	if (si_other.sin_addr.s_addr == INADDR_NONE || si_other.sin_addr.s_addr == INADDR_ANY) {
 		if (socket_handler != -1)
@@ -380,14 +360,12 @@ int L4D2_QueryServerInfo(const char* hostname, struct L4D2REP_QUERYSVRINFO* resu
  *	Get the player list, caller should free players after use, if it is non-null
  */
 int L4D2_GetPlayerList(const char* hostname, char*** players, int* count) {
-	struct in_addr* server_ipaddr;
-	int server_port;
-	int ret = parse_hostname(hostname, &server_ipaddr, &server_port);
+        struct sockaddr_in si_other;
+        int slen = sizeof(si_other);
+
+	int ret = parse_hostname(hostname, &si_other);
 	if (ret != L4D2REP_OK)
 		return ret;
-
-	struct sockaddr_in si_other;
-	int slen = sizeof(si_other);
 
 	int socket_handler = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (socket_handler == -1) {
@@ -396,12 +374,6 @@ int L4D2_GetPlayerList(const char* hostname, char*** players, int* count) {
 
 	long one = 1L;
 	ioctl(socket_handler, (int)FIONBIO, &one);
-
-	memset((char *)&si_other, 0, sizeof(si_other));
-	si_other.sin_family = AF_INET;
-	si_other.sin_port = htons(server_port);
-
-	si_other.sin_addr.s_addr = server_ipaddr->s_addr;
 
 	if (si_other.sin_addr.s_addr == INADDR_NONE || si_other.sin_addr.s_addr == INADDR_ANY) {
 		if (socket_handler != -1)
@@ -439,14 +411,13 @@ int l4d2query_run(int argc, char *argv[]) {
 		goto on_error;
 	}
 
-	struct in_addr* server_ipaddr;
-	int server_port;
-	if (parse_hostname(argv[1], &server_ipaddr, &server_port) != L4D2REP_OK) {
+	struct sockaddr_in server;
+	if (parse_hostname(argv[1], &server) != L4D2REP_OK) {
 		printf("Unable to resolve the host!\n");
 		exit_code = EXIT_FAILURE;
 		goto on_error;
 	} else {
-		printf("Querying: %s:%d\n", inet_ntoa(*server_ipaddr), server_port);
+		printf("Querying: %s:%d\n", inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	}
 
 	struct L4D2REP_QUERYSVRINFO query_server_result;
