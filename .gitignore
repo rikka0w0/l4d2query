@@ -37,3 +37,7 @@ Ankh.NoLoad
 
 #Visual Studio Code files
 .vscode/
+
+#Executables
+l4d2query
+l4d2query.exe

@@ -30,6 +30,7 @@ typedef int socklen_t;
 #define SOCKET_FLAG 0
 #endif
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "l4d2query.h"
